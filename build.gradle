@@ -1,0 +1,51 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.3.4'
+    id 'io.spring.dependency-management' version '1.1.6'
+}
+
+group   = 'com.commerce'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Spring Boot Web (Tomcat embebido, Jackson, Spring MVC)
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    // Spring Data JPA + Hibernate 6
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+    // Jakarta Bean Validation (Hibernate Validator)
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // Spring Cache Abstraction
+    implementation 'org.springframework.boot:spring-boot-starter-cache'
+
+    // Caffeine: implementación de caché en memoria de alta performance
+    implementation 'com.github.ben-manes.caffeine:caffeine'
+
+    // H2: base de datos en memoria (solo runtime, no se compila)
+    runtimeOnly 'com.h2database:h2'
+
+    // SpringDoc OpenAPI 3 / Swagger UI: genera /swagger-ui.html y /v3/api-docs
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
+
+    // Testing: JUnit 5, Mockito, MockMvc, AssertJ, JSONPath
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+    }
+}
