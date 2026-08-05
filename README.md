@@ -235,58 +235,33 @@ curl -X PATCH "http://localhost:8080/products/1"
 
 ## Decisiones técnicas de arquitectura
 
-### 1. Caché Caffeine con fallback stale-while-revalidate
+### 1. Gestión de Caché (Caffeine) con fallback ante caídas
 
-Las categorías provienen de una API pública externa que puede estar caída o lenta. Se implementó una estrategia de caché manual en `CategoryServiceImpl`:
+Las categorías provienen de una API externa pública que puede presentar interrupciones. Para garantizar la disponibilidad del sistema, se implementó un manejo de caché manual en `CategoryServiceImpl`.
 
-```java
-public List<CategoryResponse> fetchAllCategories() {
-    Cache cache = cacheManager.getCache("categories");
-    try {
-        List<CategoryResponse> fresh = categoryApiClient.fetchCategories();
-        if (cache != null) cache.put(SimpleKey.EMPTY, fresh);
-        return List.copyOf(fresh);
-    } catch (ExternalApiException e) {
-        // Fallback: servir la última versión conocida si existe
-        List<CategoryResponse> stale = cache.get(SimpleKey.EMPTY, List.class);
-        if (stale != null && !stale.isEmpty()) return List.copyOf(stale);
-        throw e;
-    }
-}
-```
+* **Manejo de caídas:** La app intenta consultar la API externa y guardar los datos en memoria por 10 minutos. Si la API externa se cae o no hay internet, el sistema captura el error y devuelve automáticamente la última lista de categorías que tenía guardada.
+* **Por qué caché manual y no `@Cacheable`:** Se usó `CacheManager` en lugar de la anotación automática `@Cacheable` para tener control total dentro de un `try/catch`. Esto permite interceptar los fallos de la API externa y servir los datos del caché como alternativa, algo que la anotación automática no permite hacer.
 
-**TTL de 10 minutos** (configurable en `CacheConfig`): equilibra frescura de datos con reducción de llamadas a la API externa. El fallback garantiza que `GET /categories` y `POST/PUT /products` sigan funcionando aunque la API externa esté caída, siempre que el caché tenga al menos una entrada válida.
+### 2. Búsqueda y Filtros Dinámicos (JPA Specifications)
 
-**Por qué el caché está en el service y no en el client con `@Cacheable`**: `@Cacheable` en un método público del mismo bean no intercepta las llamadas internas (auto-invocación sin pasar por el proxy AOP de Spring). El caché manual en el service da control total sobre el comportamiento de fallback.
+Se implementó una búsqueda flexible donde todos los parámetros de filtrado (nombre, precio mínimo/máximo, stock y categoría) son opcionales:
 
-### 2. Filtros dinámicos con JPA Criteria API (`ProductSpecification`)
+* **Filtros combinables e independientes:** Cada filtro se evalúa por separado. Si un parámetro no se envía en la petición, el sistema lo ignora automáticamente sin agregar condiciones innecesarias a la consulta SQL.
+* **Búsquedas seguras y consistentes:** Los filtros de texto permiten buscar sin distinguir mayúsculas de minúsculas y limpian caracteres especiales de SQL (como `%` o `_`) para evitar errores en las búsquedas.
 
-Cada filtro opcional es una `Specification<Product>` independiente que retorna `null` si el parámetro no se envía. `null` en JPA Specifications equivale a `TRUE` — Spring Data lo ignora y no agrega esa cláusula al `WHERE`. La composición es:
+### 3. Desvinculación de Categorías (Sin `@Entity` propia)
 
-```java
-Specification.where(nameContains(name))
-    .and(priceGreaterThanOrEqual(minPrice))
-    ...
-```
+Dado que las categorías pertenecen a un servicio externo, no se mapean como una tabla/entidad relacional propia en la base de datos local:
 
-Los filtros de texto escapan los caracteres especiales de SQL LIKE (`%`, `_`, `\`) y usan `Locale.ROOT` para consistencia de mayúsculas/minúsculas entre entornos.
+* **Almacenamiento directo:** La tabla `Product` guarda directamente los campos `categoryId` y `categoryName`. Esto evita tener que sincronizar bases de datos entre distintos sistemas.
+* **Integración tolerante a cambios:** Se utilizó la anotación `@JsonIgnoreProperties(ignoreUnknown = true)` en los DTOs para procesar únicamente los datos necesarios de la API externa, ignorando campos secundarios (como imágenes o fechas) y evitando fallos si la API externa cambia su formato.
 
-**Por qué Specifications y no queries JPQL hardcodeadas**: escalabilidad (agregar un filtro nuevo = agregar un método estático), testabilidad unitaria de cada predicado, y composición declarativa sin `if/else` en el Service.
+### 4. Consumo de API Externa con Protecciones y Timeouts (`RestClient`)
 
-### 3. `Category` no es `@Entity` — desnormalización de `categoryId` y `categoryName`
+Para la comunicación con la API externa de categorías se configuraron límites de tiempo y manejo explícito de errores:
 
-Las categorías son administradas por un servicio externo. Tratarlas como entidades JPA locales requeriría sincronización con la API externa (problema difícil). La entidad `Product` almacena `categoryId` y `categoryName` como columnas simples. El `categoryName` puede quedar desactualizado si la API externa lo cambia; para este dominio es un trade-off aceptado.
-
-**`@JsonIgnoreProperties(ignoreUnknown = true)` en `CategoryResponse`**: la API externa retorna campos adicionales (`image`, `creationAt`, `updatedAt`). Esta anotación hace la integración resiliente a cambios en el contrato externo.
-
-### 4. `RestClient` con timeouts y manejo de resiliencia
-
-```java
-factory.setConnectTimeout(5_000);  // falla rápido si no conecta
-factory.setReadTimeout(10_000);    // falla si la API no responde en 10s
-```
-
-`CategoryApiClient` captura `RestClientResponseException` (4xx/5xx HTTP) y `ResourceAccessException` (timeout, conexión rechazada) y los envuelve en `ExternalApiException`. `GlobalExceptionHandler` lo traduce a **HTTP 502 Bad Gateway**, comunicando que el error está en un servicio upstream.
+* **Límites de espera (Timeouts):** Se establece un tiempo máximo de 5 segundos para conectar y 10 segundos para recibir respuesta. Si la API externa se demora más de eso, la petición se interrumpe para no bloquear la aplicación.
+* **Respuesta clara ante fallos (HTTP 502):** Si la API externa falla, no hay conexión o se supera el tiempo límite, el sistema captura el problema y lo traduce a una respuesta **502 Bad Gateway**, informando correctamente que el error proviene de un servicio de terceros.
 
 ### 5. Manejo de errores con `@RestControllerAdvice`
 
@@ -306,14 +281,17 @@ factory.setReadTimeout(10_000);    // falla si la API no responde en 10s
 | `ExternalApiException` | 502 | API externa de categorías falla |
 | `Exception` (fallback) | 500 | Error no contemplado — loguea stacktrace, no expone internals |
 
-### 6. Base de datos H2 en memoria
+### 6. Base de Datos H2 en Memoria y Carga Inicial de Datos
 
-**Por qué H2**: portabilidad total (no requiere instalación de BD), datos volátiles a propósito (ideal para demos), arranque instantáneo y la consola web integrada facilita la inspección. En un entorno real se usaría PostgreSQL o MySQL con `ddl-auto=validate` y migraciones Flyway/Liquibase.
+Para simplificar la ejecución local y las pruebas del proyecto, se configuró una base de datos H2 en memoria:
 
-**`data.sql` cargado automáticamente**: Spring ejecuta `data.sql` después de que Hibernate crea el esquema (`defer-datasource-initialization=true`), garantizando el orden correcto. Los datos iniciales de data.sql sirven como semilla local estática para pruebas. Al realizar peticiones POST o PUT, la aplicación valida y actualiza el nombre de la categoría en vivo consultando la API externa.
+* **Portabilidad e inspección inmediata:** No requiere la instalación de un servidor de base de datos externo. Los datos son volátiles (se reinician en cada ejecución) y se pueden inspeccionar visualmente desde la consola web en `/h2-console`.
+* **Semilla de datos iniciales (`data.sql`):** La base de datos se puebla automáticamente al arrancar mediante el archivo `data.sql`. Esto garantiza disponer de datos de muestra listos para consultar y manipular sin pasos de configuración previos.
 
-### 7. `@Positive` vs `@DecimalMin("0.00")` en precio
+### 7. Validaciones de Negocio en Precio y Stock
 
-Se usa `@Positive` (precio > 0) porque un producto con precio $0.00 no tiene sentido en el dominio del comercio. Si el negocio necesitara productos gratuitos o muestras, se cambiaría a `@DecimalMin(value = "0.00", inclusive = true)`.
+Se aplican validaciones con Bean Validation (`jakarta.validation`) para asegurar la integridad de los datos de entrada:
 
-`@Max(1_000_000)` en stock es un límite de negocio razonable que evita inputs absurdos y protege la columna de base de datos.
+* **Precio estrictamente positivo (`@Positive`):** Garantiza que todo producto tenga un precio mayor a $0.00, acorde a las reglas del dominio de comercio electrónico.
+* **Límite máximo de stock (`@Max`):** Define un tope de 1.000.000 de unidades en stock para proteger la base de datos frente a valores desorbitados o inválidos.
+
