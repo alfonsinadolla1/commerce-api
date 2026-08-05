@@ -20,6 +20,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import java.time.LocalDateTime;
 import java.util.stream.Collectors;
 
+// Intercepta excepciones en todos los controllers para unificar el formato (ErrorResponse) de la API
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -103,6 +104,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneric(
             Exception ex, HttpServletRequest request) {
+        // El stacktrace queda en los logs, pero evitamos exponer internals (seguridad) al cliente
         log.error("Error inesperado en {}", request.getRequestURI(), ex);
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR,
                 "Error interno del servidor", request.getRequestURI());

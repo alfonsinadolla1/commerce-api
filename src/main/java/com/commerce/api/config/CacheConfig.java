@@ -19,6 +19,7 @@ public class CacheConfig {
         manager.setCaffeine(
                 Caffeine.newBuilder()
                         .maximumSize(100)
+                        // TTL de 10 min: balance entre datos frescos y no saturar la API externa
                         .expireAfterWrite(10, TimeUnit.MINUTES)
         );
         return manager;

@@ -10,6 +10,7 @@ public class ProductSpecification {
 
     private ProductSpecification() {}
 
+    // Escapamos % y _ para evitar que el usuario inyecte comodines SQL accidentales
     private static String escapeWildcards(String input) {
         return input
                 .replace("\\", "\\\\")
@@ -19,6 +20,7 @@ public class ProductSpecification {
 
     public static Specification<Product> nameContains(String name) {
         return (root, query, cb) -> {
+            // Retornar null en un predicado equivale a TRUE: Spring Data simplemente ignora este WHERE
             if (name == null) return null;
             String pattern = "%" + escapeWildcards(name.toLowerCase(Locale.ROOT)) + "%";
             return cb.like(cb.lower(root.get("name")), pattern, '\\');

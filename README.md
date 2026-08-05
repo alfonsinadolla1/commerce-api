@@ -21,8 +21,10 @@ API REST para la administración de productos y categorías de un comercio, desa
 
 ## Requisitos de ejecución
 
-- **JDK 17** instalado y la variable de entorno `JAVA_HOME` apuntando a él.
-  - Verificar con: `java -version` (debe mostrar `17.x.x`)
+- **JDK 17** — descargalo gratis desde [Adoptium Temurin](https://adoptium.net/temurin/releases/?version=17) (elegí tu SO; en Mac con chip Apple Silicon usá la arquitectura `aarch64`).
+  - Alternativas: macOS `brew install --cask temurin@17` · Ubuntu/Debian `sudo apt install openjdk-17-jdk`
+  - Verificar con `java -version` (debe mostrar `17.x.x`).
+  - Nota: si ya tenés Java 17 o superior, no hace falta instalar nada — el proyecto usa Gradle Toolchains y descarga el JDK 17 automáticamente al compilar (ver `settings.gradle`).
 - **Sin instalación de Gradle**: el proyecto incluye **Gradle Wrapper** (`gradlew` / `gradlew.bat`), que descarga automáticamente Gradle 8.10 la primera vez.
 - Conexión a internet al primer arranque (para descargar dependencias) y para consumir la API externa de categorías.
 
