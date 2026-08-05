@@ -92,7 +92,7 @@ Reporte HTML generado en `build/reports/tests/test/index.html`.
 
 ---
 
-## Probar la API con curl
+## Probar la API con curl en Git Bash
 
 ### GET /products — listar con paginación y filtros
 
