@@ -1,1 +1,8 @@
+// El plugin foojay-resolver-convention permite que Gradle descargue automáticamente
+// un JDK 17 si no se encuentra en el PATH/JAVA_HOME. Mejora la portabilidad
+// en sistemas donde Java no está pre-instalado.
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
+}
+
 rootProject.name = 'commerce-api'

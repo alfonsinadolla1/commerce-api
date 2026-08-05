@@ -20,10 +20,10 @@ public class Product {
     @Column(nullable = false)
     private Integer stock;
 
-    @Column(name = "category_id")
+    @Column(name = "category_id", nullable = false)
     private Long categoryId;
 
-    @Column(name = "category_name", length = 150)
+    @Column(name = "category_name", length = 150, nullable = false)
     private String categoryName;
 
     protected Product() {}

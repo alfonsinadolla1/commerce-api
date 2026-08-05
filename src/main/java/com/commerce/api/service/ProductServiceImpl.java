@@ -8,6 +8,8 @@ import com.commerce.api.entity.Product;
 import com.commerce.api.exception.ResourceNotFoundException;
 import com.commerce.api.repository.ProductRepository;
 import com.commerce.api.repository.ProductSpecification;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -19,6 +21,8 @@ import java.math.BigDecimal;
 @Service
 @Transactional(readOnly = true)
 public class ProductServiceImpl implements ProductService {
+
+    private static final Logger log = LoggerFactory.getLogger(ProductServiceImpl.class);
 
     private final ProductRepository productRepository;
     private final CategoryService categoryService;
@@ -44,7 +48,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public ProductResponse getProductById(Long id) {
         Product product = productRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Product", id));
+                .orElseThrow(() -> new ResourceNotFoundException("Producto", id));
         return ProductMapper.toResponse(product);
     }
 
@@ -53,14 +57,16 @@ public class ProductServiceImpl implements ProductService {
     public ProductResponse createProduct(ProductRequest request) {
         CategoryResponse category = categoryService.fetchCategoryById(request.categoryId());
         Product product = ProductMapper.toEntity(request, category.name());
-        return ProductMapper.toResponse(productRepository.save(product));
+        ProductResponse response = ProductMapper.toResponse(productRepository.save(product));
+        log.info("Producto creado con id={}, nombre='{}'", response.id(), response.name());
+        return response;
     }
 
     @Override
     @Transactional
     public ProductResponse updateProduct(Long id, ProductRequest request) {
         Product product = productRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Product", id));
+                .orElseThrow(() -> new ResourceNotFoundException("Producto", id));
 
         CategoryResponse category = categoryService.fetchCategoryById(request.categoryId());
 
@@ -70,15 +76,19 @@ public class ProductServiceImpl implements ProductService {
         product.setCategoryId(request.categoryId());
         product.setCategoryName(category.name());
 
-        return ProductMapper.toResponse(productRepository.save(product));
+        // La entidad está en estado "managed": Hibernate persiste los cambios
+        // automáticamente al finalizar la transacción (dirty checking). No se
+        // necesita llamar a save() explícitamente.
+        log.info("Producto actualizado id={}, nombre='{}'", id, request.name());
+        return ProductMapper.toResponse(product);
     }
 
     @Override
     @Transactional
     public void deleteProduct(Long id) {
-        if (!productRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Product", id);
-        }
-        productRepository.deleteById(id);
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Producto", id));
+        productRepository.delete(product);
+        log.info("Producto eliminado id={}", id);
     }
 }

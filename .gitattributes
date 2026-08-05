@@ -1,0 +1,8 @@
+# Normalización de fin de línea para portabilidad cross-platform.
+# Garantiza que gradlew tenga LF (requerido en Linux/macOS/Git Bash) y
+# gradlew.bat tenga CRLF (requerido en Windows CMD/PowerShell).
+* text=auto
+*.sh text eol=lf
+gradlew text eol=lf
+*.bat text eol=crlf
+gradlew.bat text eol=crlf

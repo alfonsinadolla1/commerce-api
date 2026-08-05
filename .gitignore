@@ -30,3 +30,11 @@ logs/
 # Variables de entorno locales (nunca commitear secrets)
 .env
 .env.local
+
+# Archivos de base de datos H2 persistida (solo se usa H2 en memoria en este proyecto)
+*.db
+*.db-shm
+*.db-wal
+
+# Carpetas de herramientas externas
+.freebuff/
