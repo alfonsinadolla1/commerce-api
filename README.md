@@ -21,10 +21,12 @@ API REST para la administración de productos y categorías de un comercio, desa
 
 ## Requisitos de ejecución
 
-- **JDK 17** — descargalo gratis desde [Adoptium Temurin](https://adoptium.net/temurin/releases/?version=17) (elegí tu SO; en Mac con chip Apple Silicon usá la arquitectura `aarch64`).
-  - Alternativas: macOS `brew install --cask temurin@17` · Ubuntu/Debian `sudo apt install openjdk-17-jdk`
+- **JDK 17** — puede descargarse gratis desde [Adoptium Temurin](https://adoptium.net/temurin/releases/?version=17) 
   - Verificar con `java -version` (debe mostrar `17.x.x`).
-  - Nota: si ya tenés Java 17 o superior, no hace falta instalar nada — el proyecto usa Gradle Toolchains y descarga el JDK 17 automáticamente al compilar (ver `settings.gradle`).
+  **Nota para macOS:** Descargar el paquete `.pkg` con arquitectura `aarch64` (para chips Apple Silicon M1/M2/M3/M4). Una vez instalado, activalo en la terminal ejecutando:
+    ```bash
+    export JAVA_HOME=$(/usr/libexec/java_home -v 17)
+    ```
 - **Sin instalación de Gradle**: el proyecto incluye **Gradle Wrapper** (`gradlew` / `gradlew.bat`), que descarga automáticamente Gradle 8.10 la primera vez.
 - Conexión a internet al primer arranque (para descargar dependencias) y para consumir la API externa de categorías.
 
@@ -82,7 +84,7 @@ Reporte HTML generado en `build/reports/tests/test/index.html`.
 | `http://localhost:8080/categories` | Categorías desde API externa (cacheadas 10 min) |
 | `http://localhost:8080/swagger-ui.html` | **Swagger UI** — probar todos los endpoints |
 | `http://localhost:8080/v3/api-docs` | Especificación OpenAPI 3 (JSON) |
-| `http://localhost:8080/h2-console` | Consola H2 _(solo demo — no usar en producción)_ |
+| `http://localhost:8080/h2-console` | Consola H2 |
 
 **Parámetros de conexión H2:**
 - JDBC URL: `jdbc:h2:mem:commercedb`
@@ -304,7 +306,7 @@ factory.setReadTimeout(10_000);    // falla si la API no responde en 10s
 | `ExternalApiException` | 502 | API externa de categorías falla |
 | `Exception` (fallback) | 500 | Error no contemplado — loguea stacktrace, no expone internals |
 
-**H2 en memoria con `ddl-auto=create-drop`**
+### 6. Base de datos H2 en memoria
 
 **Por qué H2**: portabilidad total (no requiere instalación de BD), datos volátiles a propósito (ideal para demos), arranque instantáneo y la consola web integrada facilita la inspección. En un entorno real se usaría PostgreSQL o MySQL con `ddl-auto=validate` y migraciones Flyway/Liquibase.
 
